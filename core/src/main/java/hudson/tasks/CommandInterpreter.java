@@ -94,7 +94,7 @@ public abstract class CommandInterpreter extends Builder {
                 for(Map.Entry<String,String> e : build.getBuildVariables().entrySet())
                     envVars.put(e.getKey(),e.getValue());
 
-                r = join(launcher.launch().cmds(buildCommandLine(script)).envs(envVars).stdout(listener).pwd(ws).start());
+                r = runCommand(launcher, listener, ws, script, envVars);
             } catch (IOException e) {
                 Util.displayIOException(e, listener);
                 e.printStackTrace(listener.fatalError(Messages.CommandInterpreter_CommandFailed()));
@@ -122,6 +122,15 @@ public abstract class CommandInterpreter extends Builder {
                 e.printStackTrace( listener.fatalError(Messages.CommandInterpreter_UnableToDelete(script)) );
             }
         }
+    }
+
+    public int runCommand(Launcher launcher, TaskListener listener,
+            FilePath ws, FilePath script, EnvVars envVars) throws IOException,
+            InterruptedException {
+        int r;
+        r = join(launcher.launch().cmds(buildCommandLine(script)).envs(envVars)
+                .stdout(listener).pwd(ws).start());
+        return r;
     }
 
     /**
