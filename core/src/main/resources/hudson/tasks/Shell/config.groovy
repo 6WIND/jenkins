@@ -27,3 +27,16 @@ f=namespace(lib.FormTagLib)
 f.entry(title:_("Command"),description:_("description",rootURL)) {
     f.textarea(name: "command", value: instance?.command, class: "fixed-width", 'codemirror-mode': 'shell', 'codemirror-config': "mode: 'text/x-sh'")
 }
+
+f.advanced() {
+    f.entry(title:_("Signal sent on abort"),
+            description:_("signal sent to shell processes when clicking on job abort button"),
+            field:"signalForAbort") {
+        f.textbox()
+    }
+    f.entry(title:_("Max seconds after process abort"),
+            description:_("check every second if process is living or not, kill with SIGTERM after timeout"),
+            field:"timeoutForAbort") {
+        f.textbox()
+    }
+}
