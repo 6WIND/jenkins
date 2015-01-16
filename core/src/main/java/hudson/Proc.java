@@ -182,6 +182,12 @@ public abstract class Proc {
         private final InputStream stdout,stderr;
         private final OutputStream stdin;
 
+        public static final int DEFAULT_TIMEOUT = 30;
+        public static final int SIG_FOR_ABORT_NOT_CONFIGURED = -1;
+
+        private int signalForAbort = SIG_FOR_ABORT_NOT_CONFIGURED;
+        private int abortTimeout = DEFAULT_TIMEOUT;
+
         public LocalProc(String cmd, Map<String,String> env, OutputStream out, File workDir) throws IOException {
             this(cmd,Util.mapToEnv(env),out,workDir);
         }
@@ -203,17 +209,27 @@ public abstract class Proc {
         }
 
         public LocalProc(String[] cmd,String[] env,InputStream in,OutputStream out, File workDir) throws IOException {
-            this(cmd,env,in,out,null,workDir);
+            this(cmd,env,in,out,null,workDir, SIG_FOR_ABORT_NOT_CONFIGURED, DEFAULT_TIMEOUT);
         }
 
         /**
          * @param err
          *      null to redirect stderr to stdout.
          */
-        public LocalProc(String[] cmd,String[] env,InputStream in,OutputStream out,OutputStream err,File workDir) throws IOException {
+        public LocalProc(String[] cmd,
+                         String[] env, InputStream in,
+                         OutputStream out, OutputStream err, File workDir,
+                         int signalForAbort,
+                         int abortTimeout) throws IOException {
             this( calcName(cmd),
                   stderr(environment(new ProcessBuilder(cmd),env).directory(workDir), err==null || err== SELFPUMP_OUTPUT),
                   in, out, err );
+
+            if (signalForAbort != SIG_FOR_ABORT_NOT_CONFIGURED) {
+                this.signalForAbort = signalForAbort;
+                this.abortTimeout = abortTimeout;
+            }
+
         }
 
         private static ProcessBuilder stderr(ProcessBuilder pb, boolean redirectError) {
@@ -302,6 +318,18 @@ public abstract class Proc {
             return stdin;
         }
 
+        public void setSignalForAbort(int signal) {
+            this.signalForAbort = signal;
+        }
+
+        public void setAbortTimeout(int abortTimeout) {
+            this.abortTimeout = abortTimeout;
+        }
+
+        public boolean isSignalForAbortConfigured() {
+            return signalForAbort != SIG_FOR_ABORT_NOT_CONFIGURED;
+        }
+
         /**
          * Waits for the completion of the process.
          */
@@ -349,8 +377,11 @@ public abstract class Proc {
                 }
                 return r;
             } catch (InterruptedException e) {
-                // aborting. kill the process
-                destroy();
+                // aborting requested by user. gently kill the process and its children
+                if(isSignalForAbortConfigured())
+                    destroyGently(signalForAbort, abortTimeout);
+                else
+                    destroy();
                 throw e;
             } finally {
                 t.setName(oldName);
@@ -378,6 +409,14 @@ public abstract class Proc {
          */
         private void destroy() throws InterruptedException {
             ProcessTree.get().killAll(proc,cookie);
+        }
+
+        /**
+         * Gently destroys the child process with join.
+         */
+        private void destroyGently(int signal, int timeout) throws InterruptedException {
+            ProcessTree pt = ProcessTree.get();
+            pt.killAllGently(proc, cookie, signal, timeout);
         }
 
         /**

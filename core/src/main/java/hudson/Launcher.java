@@ -155,6 +155,9 @@ public abstract class Launcher {
         protected OutputStream stdout = NULL_OUTPUT_STREAM, stderr;
         protected InputStream stdin = NULL_INPUT_STREAM;
         protected String[] envs;
+        protected int signalForAbort;
+        protected int abortTimeout;
+
         /**
          * True to reverse the I/O direction.
          *
@@ -199,6 +202,22 @@ public abstract class Launcher {
 
         public List<String> cmds() {
             return commands;
+        }
+
+        public int getSignalForAbort() {
+            return signalForAbort;
+        }
+
+        public void setSignalForAbort(int signalForAbort) {
+            this.signalForAbort = signalForAbort;
+        }
+
+        public int getAbortTimeout() {
+            return abortTimeout;
+        }
+
+        public void setAbortTimeout(int abortTimeout) {
+            this.abortTimeout = abortTimeout;
         }
 
         /**
@@ -847,7 +866,9 @@ public abstract class Launcher {
                     ps.reverseStdin ?LocalProc.SELFPUMP_INPUT:ps.stdin,
                     ps.reverseStdout?LocalProc.SELFPUMP_OUTPUT:ps.stdout,
                     ps.reverseStderr?LocalProc.SELFPUMP_OUTPUT:ps.stderr,
-                    toFile(ps.pwd));
+                    toFile(ps.pwd),
+                    ps.signalForAbort,
+                    ps.abortTimeout);
         }
 
         private File toFile(FilePath f) {
@@ -956,7 +977,7 @@ public abstract class Launcher {
             final String workDir = ps.pwd==null ? null : ps.pwd.getRemote();
 
             try {
-                return new ProcImpl(getChannel().call(new RemoteLaunchCallable(ps.commands, ps.masks, ps.envs, in, ps.reverseStdin, out, ps.reverseStdout, err, ps.reverseStderr, ps.quiet, workDir, listener)));
+                return new ProcImpl(getChannel().call(new RemoteLaunchCallable(ps.commands, ps.masks, ps.envs, in, ps.reverseStdin, out, ps.reverseStdout, err, ps.reverseStderr, ps.quiet, workDir, listener, ps.signalForAbort, ps.abortTimeout)));
             } catch (InterruptedException e) {
                 throw (IOException)new InterruptedIOException().initCause(e);
             }
@@ -1168,8 +1189,17 @@ public abstract class Launcher {
         private final TaskListener listener;
         private final boolean reverseStdin, reverseStdout, reverseStderr;
         private final boolean quiet;
+        private final int signalForAbort;
+        private final int abortTimeout;
 
         RemoteLaunchCallable(List<String> cmd, boolean[] masks, String[] env, InputStream in, boolean reverseStdin, OutputStream out, boolean reverseStdout, OutputStream err, boolean reverseStderr, boolean quiet, String workDir, TaskListener listener) {
+            this(cmd, masks, env, in, reverseStdin, out, reverseStdout, err, reverseStderr, quiet, workDir, listener, LocalProc.SIG_FOR_ABORT_NOT_CONFIGURED, LocalProc.DEFAULT_TIMEOUT);
+        }
+
+        RemoteLaunchCallable(List<String> cmd, boolean[] masks, String[] env,
+                InputStream in, boolean reverseStdin, OutputStream out,
+                boolean reverseStdout, OutputStream err, boolean reverseStderr,
+                boolean quiet, String workDir, TaskListener listener, int signal, int timeout) {
             this.cmd = new ArrayList<String>(cmd);
             this.masks = masks;
             this.env = env;
@@ -1182,11 +1212,16 @@ public abstract class Launcher {
             this.reverseStdout = reverseStdout;
             this.reverseStderr = reverseStderr;
             this.quiet = quiet;
+            this.signalForAbort = signal;
+            this.abortTimeout = timeout;
         }
 
         public RemoteProcess call() throws IOException {
             Launcher.ProcStarter ps = new LocalLauncher(listener).launch();
             ps.cmds(cmd).masks(masks).envs(env).stdin(in).stdout(out).stderr(err).quiet(quiet);
+            ps.setSignalForAbort(signalForAbort);
+            ps.setAbortTimeout(abortTimeout);
+
             if(workDir!=null)   ps.pwd(workDir);
             if (reverseStdin)   ps.writeStdin();
             if (reverseStdout)  ps.readStdout();

@@ -23,12 +23,18 @@
  */
 package hudson.tasks;
 
+import hudson.EnvVars;
 import hudson.FilePath;
+import hudson.Launcher;
+import hudson.Launcher.ProcStarter;
+import hudson.Proc.LocalProc;
 import hudson.Util;
 import hudson.Extension;
+import hudson.model.TaskListener;
 import hudson.model.AbstractProject;
 import hudson.remoting.VirtualChannel;
 import hudson.util.FormValidation;
+import hudson.util.ProcessTree;
 import java.io.IOException;
 import java.io.ObjectStreamException;
 import hudson.util.LineEndingConversion;
@@ -58,9 +64,19 @@ import javax.annotation.CheckForNull;
  */
 public class Shell extends CommandInterpreter {
 
+    private String signalForAbort;
+    private String timeoutForAbort;
+
     @DataBoundConstructor
-    public Shell(String command) {
+    public Shell(String command, String signalForAbort, String timeoutForAbort) {
         super(LineEndingConversion.convertEOL(command, LineEndingConversion.EOLType.Unix));
+        this.signalForAbort = Util.fixEmptyAndTrim(signalForAbort);
+        this.timeoutForAbort = Util.fixEmptyAndTrim(timeoutForAbort);
+    }
+
+    /* for backward compat */
+    public Shell(String command) {
+        this(command, null, null);
     }
 
     private Integer unstableReturn;
@@ -125,9 +141,65 @@ public class Shell extends CommandInterpreter {
     }
 
     private Object readResolve() throws ObjectStreamException {
-        Shell shell = new Shell(command);
+        Shell shell = new Shell(command, signalForAbort, timeoutForAbort);
         shell.setUnstableReturn(unstableReturn);
         return shell;
+    }
+
+    public String getSignalForAbort() {
+        return signalForAbort;
+    }
+
+    public void setSignalForAbort(String signalForAbort) {
+        this.signalForAbort = signalForAbort;
+    }
+
+    public String getTimeoutForAbort() {
+        return timeoutForAbort;
+    }
+
+    public void setTimeoutForAbort(String timeoutForAbort) {
+        this.timeoutForAbort = timeoutForAbort;
+    }
+
+    @Override
+    public int runCommand(Launcher launcher, TaskListener listener,
+            FilePath ws, FilePath script, EnvVars envVars) throws IOException,
+            InterruptedException {
+        ProcStarter starter = launcher.launch();
+        starter.cmds(buildCommandLine(script));
+        starter.envs(envVars);
+        starter.stdout(listener);
+        starter.pwd(ws);
+
+        try {
+            String defaultSignal = Util.fixEmptyAndTrim(getDescriptor().getDefaultSignal());
+            String defaultTimeout = Util.fixEmptyAndTrim(getDescriptor().getDefaultTimeout());
+            /* By default, if nothing is configured, keep the legacy procedure for killing process */
+            int signal = LocalProc.SIG_FOR_ABORT_NOT_CONFIGURED;
+            int timeout = LocalProc.DEFAULT_TIMEOUT;
+
+            /* Default values for signal and timeout defined in Jenkins global properties */
+            if (defaultSignal != null)
+                signal = Integer.decode(defaultSignal);
+
+            if (defaultTimeout != null)
+                timeout = Integer.decode(defaultTimeout);
+
+            /* signal and timeout can be overidden by jobs */
+            if (signalForAbort != null)
+                signal = Integer.decode(signalForAbort);
+
+            if (timeoutForAbort != null)
+                timeout = Integer.decode(timeoutForAbort);
+
+            starter.setSignalForAbort(signal);
+            starter.setAbortTimeout(timeout);
+        } catch (NumberFormatException e) {
+            /* ignore */
+        }
+
+        return join(starter.start());
     }
 
     @Extension @Symbol("shell")
@@ -136,6 +208,8 @@ public class Shell extends CommandInterpreter {
          * Shell executable, or null to default.
          */
         private String shell;
+        private String defaultSignal;
+        private String defaultTimeout;
 
         public DescriptorImpl() {
             load();
@@ -187,6 +261,22 @@ public class Shell extends CommandInterpreter {
 
         public String getDisplayName() {
             return Messages.Shell_DisplayName();
+        }
+
+        public String getDefaultSignal() {
+            return defaultSignal;
+        }
+
+        public void setDefaultSignal(String defaultSignal) {
+            this.defaultSignal = defaultSignal;
+        }
+
+        public String getDefaultTimeout() {
+            return defaultTimeout;
+        }
+
+        public void setDefaultTimeout(String defaultTimeout) {
+            this.defaultTimeout = defaultTimeout;
         }
 
         /**

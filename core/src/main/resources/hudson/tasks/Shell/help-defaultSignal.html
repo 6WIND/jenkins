@@ -1,0 +1,26 @@
+<div>
+ <p>
+ Numeric value of signal to send to spawned process.
+ Only valid on operating systems supporting UNIX-like signals.
+ </p>
+
+ <p>Supported signals are:</p>
+
+ <ul>
+  <li><b>1</b> <i>(SIGHUP)</i></li>
+  <li><b>2</b> <i>(SIGINT)</i></li>
+  <li><b>3</b> <i>(SIGQUIT)</i></li>
+  <li><b>4</b> <i>(SIGILL)</i></li>
+  <li><b>5</b> <i>(SIGTRAP)</i></li>
+  <li><b>6</b> <i>(SIGABRT)</i></li>
+  <li><b>10</b> <i>(SIGUSR1)</i></li>
+  <li><b>12</b> <i>(SIGUSR2)</i></li>
+  <li><b>15</b> <i>(SIGTERM)</i></li>
+ </ul>
+
+ <p>
+ For signals not designed to terminate a process, note that a SIGTERM
+ will be send after the number of seconds configured in "Max timeout per
+ process abort" parameter
+ </p>
+</div>

@@ -148,6 +148,21 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
     }
 
     /**
+     * Convenience method that does {@link #killAll(Map)} and {@link OSProcess#killRecursively()}.
+     * This is necessary to reliably kill the process and its descendants, as some OS
+     * may not implement {@link #killAll(Map)}.
+     *
+     * Either of the parameter can be null.
+     */
+    public void killAllGently(Process proc, Map<String, String> modelEnvVars, int signal, int timeout) throws InterruptedException {
+        LOGGER.fine("killAllGently: process="+proc+" and envs="+modelEnvVars);
+        OSProcess p = get(proc);
+        if(p!=null) p.killGentlyRecursively(signal, timeout);
+        if(modelEnvVars!=null)
+            killAll(modelEnvVars);
+    }
+
+    /**
      * Obtains the list of killers.
      */
     /*package*/ final List<ProcessKiller> getKillers() throws InterruptedException {
@@ -248,6 +263,16 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
             }
             return null;
         }
+
+        /**
+         * Kills this process and all the descendants.
+         * <p>
+         * Note that the notion of "descendants" is somewhat vague,
+         * in the presence of such things like daemons. On platforms
+         * where the recursive operation is not supported, this just kills
+         * the current process.
+         */
+        public abstract void killGentlyRecursively(int signal, int timeout) throws InterruptedException;
 
         /**
          * Gets the command-line arguments of this process.
@@ -391,6 +416,16 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
                     killByKiller();
                 }
 
+                public void killGentlyRecursively(int signal, int timeout) {
+                    // fall back to a single process killer
+                    proc.destroy();
+                }
+
+                public void killGently(int signal, int timeout) throws InterruptedException {
+                    proc.destroy();
+                    killByKiller();
+                }
+
                 public List<String> getArguments() {
                     return Collections.emptyList();
                 }
@@ -435,6 +470,18 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
                             return;
 
                         LOGGER.finer("Killing "+getPid());
+                        p.kill();
+                        killByKiller();
+                    }
+
+                    public void killGentlyRecursively(int signal, int timeout) throws InterruptedException {
+                        LOGGER.finer("Killing recursively "+ getPid());
+                        p.killRecursively();
+                        killByKiller();
+                    }
+
+                    public void killGently(int signal, int timeout) throws InterruptedException {
+                        LOGGER.finer("Killing "+ getPid());
                         p.kill();
                         killByKiller();
                     }
@@ -588,12 +635,74 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
             killByKiller();
         }
 
+        /**
+         * Tries to kill this process.
+         */
+        public void killGently(int signal, int timeout) throws InterruptedException {
+            int pid = getPid();
+            boolean gentlyFailed = false;
+            int ret;
+
+            /* Test if process is alive before sending signal */
+            if ((ret = LIBC.kill(pid, 0)) != 0) {
+                LOGGER.info("Process " + pid + " as already finished, no need to send signal "+ signal);
+                return;
+            }
+
+            /* Sending the configured signal to process */
+            LOGGER.info("Killing pid " + pid + " with signal "+ signal);
+            ret = LIBC.kill(pid, signal);
+
+            if (ret != 0) {
+                LOGGER.warning("Fail to send signal " + signal
+                        + " to process " + pid + " :"+ LIBC.strerror(Native.getLastError())
+                        + ", kill it the usual way");
+                gentlyFailed = true;
+            } else {
+                try {
+                    /* Then wait for process termination, by sending signal 0 continuously */
+                    while (--timeout >= 0) {
+                        /* Sending signal 0 to process to check it is alive or not */
+                        if ((ret = LIBC.kill(pid, 0)) != 0) {
+                            LOGGER.info("Process " + pid + " as finished");
+                            break;
+                        } else {
+                            Thread.sleep(1000);
+                        }
+                    }
+                }
+                catch (InterruptedException e) {
+                    // nothing more to to
+                }
+                if (timeout <= 0) {
+                    LOGGER.warning("Process " + pid + " is still alive");
+                    gentlyFailed = true;
+                }
+            }
+
+            /* In case the process fails to receive signal or didn't stop, kill it the usual way */
+            if (gentlyFailed) {
+                kill();
+            }
+            else
+                killByKiller();
+        }
+
         public void killRecursively() throws InterruptedException {
             // We kill individual processes of a tree, so handling vetoes inside #kill() is enough for UnixProcess es
             LOGGER.fine("Recursively killing pid="+getPid());
             for (OSProcess p : getChildren())
                 p.killRecursively();
             kill();
+        }
+
+        public void killGentlyRecursively(int signal, int timeout) throws InterruptedException {
+            LOGGER.info("Gently killing childs of pid " + getPid() + " with signal " + signal);
+
+            for (OSProcess p : getChildren())
+                p.killGently(signal, timeout);
+
+            killGently(signal, timeout);
         }
 
         /**
@@ -1289,6 +1398,14 @@ public abstract class ProcessTree implements Iterable<OSProcess>, IProcessTree, 
             }
 
             public void killRecursively() throws InterruptedException {
+                proxy.killRecursively();
+            }
+
+            public void killGently(int signal, int timeout) throws InterruptedException {
+                proxy.kill();
+            }
+
+            public void killGentlyRecursively(int signal, int timeout) throws InterruptedException {
                 proxy.killRecursively();
             }
 

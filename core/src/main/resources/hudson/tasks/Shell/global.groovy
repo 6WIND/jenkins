@@ -28,4 +28,10 @@ f.section(title:_("Shell")) {
     f.entry(field: 'shell', title:_("Shell executable")) {
         f.textbox()
     }
+    f.entry(title:_("Signal sent on abort"),description:_("signal sent to shell processes when clicking on job abort button"), field:"defaultSignal") {
+        f.textbox()
+    }
+    f.entry(title:_("Max timeout per process abort"),description:_("check every second if process is living or not, kill with SIGTERM after timeout"), field:"defaultTimeout") {
+        f.textbox()
+    }
 }
