@@ -157,6 +157,7 @@ public abstract class Launcher {
         protected String[] envs;
         protected int signalForAbort;
         protected int abortTimeout;
+        protected int maxKillDepthForAbort;
 
         /**
          * True to reverse the I/O direction.
@@ -218,6 +219,14 @@ public abstract class Launcher {
 
         public void setAbortTimeout(int abortTimeout) {
             this.abortTimeout = abortTimeout;
+        }
+
+        public int getMaxKillDepthForAbort() {
+            return maxKillDepthForAbort;
+        }
+
+        public void setMaxKillDepthForAbort(int maxKillDepthForAbort) {
+            this.maxKillDepthForAbort = maxKillDepthForAbort;
         }
 
         /**
@@ -868,7 +877,8 @@ public abstract class Launcher {
                     ps.reverseStderr?LocalProc.SELFPUMP_OUTPUT:ps.stderr,
                     toFile(ps.pwd),
                     ps.signalForAbort,
-                    ps.abortTimeout);
+                    ps.abortTimeout,
+                    ps.maxKillDepthForAbort);
         }
 
         private File toFile(FilePath f) {
@@ -977,7 +987,7 @@ public abstract class Launcher {
             final String workDir = ps.pwd==null ? null : ps.pwd.getRemote();
 
             try {
-                return new ProcImpl(getChannel().call(new RemoteLaunchCallable(ps.commands, ps.masks, ps.envs, in, ps.reverseStdin, out, ps.reverseStdout, err, ps.reverseStderr, ps.quiet, workDir, listener, ps.signalForAbort, ps.abortTimeout)));
+                return new ProcImpl(getChannel().call(new RemoteLaunchCallable(ps.commands, ps.masks, ps.envs, in, ps.reverseStdin, out, ps.reverseStdout, err, ps.reverseStderr, ps.quiet, workDir, listener, ps.signalForAbort, ps.abortTimeout,ps.maxKillDepthForAbort)));
             } catch (InterruptedException e) {
                 throw (IOException)new InterruptedIOException().initCause(e);
             }
@@ -1191,15 +1201,16 @@ public abstract class Launcher {
         private final boolean quiet;
         private final int signalForAbort;
         private final int abortTimeout;
+        private final int maxKillDepthForAbort;
 
         RemoteLaunchCallable(List<String> cmd, boolean[] masks, String[] env, InputStream in, boolean reverseStdin, OutputStream out, boolean reverseStdout, OutputStream err, boolean reverseStderr, boolean quiet, String workDir, TaskListener listener) {
-            this(cmd, masks, env, in, reverseStdin, out, reverseStdout, err, reverseStderr, quiet, workDir, listener, LocalProc.SIG_FOR_ABORT_NOT_CONFIGURED, LocalProc.DEFAULT_TIMEOUT);
+            this(cmd, masks, env, in, reverseStdin, out, reverseStdout, err, reverseStderr, quiet, workDir, listener, LocalProc.SIG_FOR_ABORT_NOT_CONFIGURED, LocalProc.DEFAULT_TIMEOUT,LocalProc.DEFAULT_MAX_DEPTH_FOR_ABORT);
         }
 
         RemoteLaunchCallable(List<String> cmd, boolean[] masks, String[] env,
                 InputStream in, boolean reverseStdin, OutputStream out,
                 boolean reverseStdout, OutputStream err, boolean reverseStderr,
-                boolean quiet, String workDir, TaskListener listener, int signal, int timeout) {
+                boolean quiet, String workDir, TaskListener listener, int signal, int timeout, int depth) {
             this.cmd = new ArrayList<String>(cmd);
             this.masks = masks;
             this.env = env;
@@ -1214,6 +1225,7 @@ public abstract class Launcher {
             this.quiet = quiet;
             this.signalForAbort = signal;
             this.abortTimeout = timeout;
+            this.maxKillDepthForAbort = depth;
         }
 
         public RemoteProcess call() throws IOException {
@@ -1221,6 +1233,7 @@ public abstract class Launcher {
             ps.cmds(cmd).masks(masks).envs(env).stdin(in).stdout(out).stderr(err).quiet(quiet);
             ps.setSignalForAbort(signalForAbort);
             ps.setAbortTimeout(abortTimeout);
+            ps.setMaxKillDepthForAbort(maxKillDepthForAbort);
 
             if(workDir!=null)   ps.pwd(workDir);
             if (reverseStdin)   ps.writeStdin();

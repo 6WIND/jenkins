@@ -42,4 +42,9 @@ f.advanced() {
             field:"timeoutForAbort") {
         f.textbox()
     }
+    f.entry(title:_("Signal max depth"),
+            description:_("defines the depth of sending signal to child processes"),
+            field:"maxKillDepthForAbort") {
+        f.textbox()
+    }
 }

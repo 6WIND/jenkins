@@ -184,9 +184,11 @@ public abstract class Proc {
 
         public static final int DEFAULT_TIMEOUT = 30;
         public static final int SIG_FOR_ABORT_NOT_CONFIGURED = -1;
+        public static final int DEFAULT_MAX_DEPTH_FOR_ABORT = 2;
 
         private int signalForAbort = SIG_FOR_ABORT_NOT_CONFIGURED;
         private int abortTimeout = DEFAULT_TIMEOUT;
+        private int maxKillDepthForAbort = DEFAULT_MAX_DEPTH_FOR_ABORT;
 
         public LocalProc(String cmd, Map<String,String> env, OutputStream out, File workDir) throws IOException {
             this(cmd,Util.mapToEnv(env),out,workDir);
@@ -209,7 +211,7 @@ public abstract class Proc {
         }
 
         public LocalProc(String[] cmd,String[] env,InputStream in,OutputStream out, File workDir) throws IOException {
-            this(cmd,env,in,out,null,workDir, SIG_FOR_ABORT_NOT_CONFIGURED, DEFAULT_TIMEOUT);
+            this(cmd,env,in,out,null,workDir, SIG_FOR_ABORT_NOT_CONFIGURED, DEFAULT_TIMEOUT, DEFAULT_MAX_DEPTH_FOR_ABORT);
         }
 
         /**
@@ -220,7 +222,8 @@ public abstract class Proc {
                          String[] env, InputStream in,
                          OutputStream out, OutputStream err, File workDir,
                          int signalForAbort,
-                         int abortTimeout) throws IOException {
+                         int abortTimeout,
+                         int maxKillDepthForAbort) throws IOException {
             this( calcName(cmd),
                   stderr(environment(new ProcessBuilder(cmd),env).directory(workDir), err==null || err== SELFPUMP_OUTPUT),
                   in, out, err );
@@ -228,6 +231,7 @@ public abstract class Proc {
             if (signalForAbort != SIG_FOR_ABORT_NOT_CONFIGURED) {
                 this.signalForAbort = signalForAbort;
                 this.abortTimeout = abortTimeout;
+                this.maxKillDepthForAbort = maxKillDepthForAbort;
             }
 
         }
@@ -330,6 +334,10 @@ public abstract class Proc {
             return signalForAbort != SIG_FOR_ABORT_NOT_CONFIGURED;
         }
 
+        public void setMaxKillDepthForAbort(int maxKillDepthForAbort) {
+            this.maxKillDepthForAbort = maxKillDepthForAbort;
+        }
+
         /**
          * Waits for the completion of the process.
          */
@@ -379,7 +387,7 @@ public abstract class Proc {
             } catch (InterruptedException e) {
                 // aborting requested by user. gently kill the process and its children
                 if(isSignalForAbortConfigured())
-                    destroyGently(signalForAbort, abortTimeout);
+                    destroyGently(signalForAbort, abortTimeout, maxKillDepthForAbort);
                 else
                     destroy();
                 throw e;
@@ -414,9 +422,9 @@ public abstract class Proc {
         /**
          * Gently destroys the child process with join.
          */
-        private void destroyGently(int signal, int timeout) throws InterruptedException {
+        private void destroyGently(int signal, int timeout, int maxDepth) throws InterruptedException {
             ProcessTree pt = ProcessTree.get();
-            pt.killAllGently(proc, cookie, signal, timeout);
+            pt.killAllGently(proc, cookie, signal, timeout, maxDepth);
         }
 
         /**

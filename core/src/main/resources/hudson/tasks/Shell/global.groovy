@@ -34,4 +34,9 @@ f.section(title:_("Shell")) {
     f.entry(title:_("Max timeout per process abort"),description:_("check every second if process is living or not, kill with SIGTERM after timeout"), field:"defaultTimeout") {
         f.textbox()
     }
+    f.entry(title:_("Signal max depth"),
+            description:_("defines the depth of sending signal to child processes"),
+            field:"defaultMaxKillDepth") {
+        f.textbox()
+    }
 }
