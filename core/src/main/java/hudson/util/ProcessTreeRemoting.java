@@ -26,7 +26,7 @@ public class ProcessTreeRemoting {
         void kill() throws InterruptedException;
         void killRecursively() throws InterruptedException;
         void killGently(int signal, int timeout) throws InterruptedException;
-        void killGentlyRecursively(int signal, int timeout) throws InterruptedException;
+        void killGentlyRecursively(int signal, int timeout, int depth) throws InterruptedException;
         List<String> getArguments();
         EnvVars getEnvironmentVariables();
         <T> T act(ProcessCallable<T> callable) throws IOException, InterruptedException;

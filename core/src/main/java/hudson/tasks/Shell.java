@@ -60,17 +60,22 @@ public class Shell extends CommandInterpreter {
 
     private String signalForAbort;
     private String timeoutForAbort;
+    private String maxKillDepthForAbort;
 
     @DataBoundConstructor
-    public Shell(String command, String signalForAbort, String timeoutForAbort) {
+    public Shell(String command,
+                 String signalForAbort,
+                 String timeoutForAbort,
+                 String maxKillDepthForAbort) {
         super(LineEndingConversion.convertEOL(command, LineEndingConversion.EOLType.Unix));
         this.signalForAbort = Util.fixEmptyAndTrim(signalForAbort);
         this.timeoutForAbort = Util.fixEmptyAndTrim(timeoutForAbort);
+        this.maxKillDepthForAbort = Util.fixEmptyAndTrim(maxKillDepthForAbort);
     }
 
     /* for backward compat */
     public Shell(String command) {
-        this(command, null, null);
+        this(command, null, null, null);
     }
 
     /**
@@ -116,7 +121,7 @@ public class Shell extends CommandInterpreter {
     }
 
     private Object readResolve() throws ObjectStreamException {
-        return new Shell(command, signalForAbort, timeoutForAbort);
+        return new Shell(command, signalForAbort, timeoutForAbort, maxKillDepthForAbort);
     }
 
     public String getSignalForAbort() {
@@ -135,6 +140,14 @@ public class Shell extends CommandInterpreter {
         this.timeoutForAbort = timeoutForAbort;
     }
 
+    public String getMaxKillDepthForAbort() {
+        return maxKillDepthForAbort;
+    }
+
+    public void setMaxKillDepthForAbort(String maxKillDepthForAbort) {
+        this.maxKillDepthForAbort = maxKillDepthForAbort;
+    }
+
     @Override
     public int runCommand(Launcher launcher, TaskListener listener,
             FilePath ws, FilePath script, EnvVars envVars) throws IOException,
@@ -148,9 +161,12 @@ public class Shell extends CommandInterpreter {
         try {
             String defaultSignal = Util.fixEmptyAndTrim(getDescriptor().getDefaultSignal());
             String defaultTimeout = Util.fixEmptyAndTrim(getDescriptor().getDefaultTimeout());
+            String defaultDepth = Util.fixEmptyAndTrim(getDescriptor().getDefaultMaxKillDepth());
+
             /* By default, if nothing is configured, keep the legacy procedure for killing process */
             int signal = LocalProc.SIG_FOR_ABORT_NOT_CONFIGURED;
             int timeout = LocalProc.DEFAULT_TIMEOUT;
+            int depth = LocalProc.DEFAULT_MAX_DEPTH_FOR_ABORT;
 
             /* Default values for signal and timeout defined in Jenkins global properties */
             if (defaultSignal != null)
@@ -159,6 +175,9 @@ public class Shell extends CommandInterpreter {
             if (defaultTimeout != null)
                 timeout = Integer.decode(defaultTimeout);
 
+            if (defaultDepth != null)
+                depth = Integer.decode(defaultDepth);
+
             /* signal and timeout can be overidden by jobs */
             if (signalForAbort != null)
                 signal = Integer.decode(signalForAbort);
@@ -166,8 +185,12 @@ public class Shell extends CommandInterpreter {
             if (timeoutForAbort != null)
                 timeout = Integer.decode(timeoutForAbort);
 
+            if (maxKillDepthForAbort != null)
+                depth = Integer.decode(maxKillDepthForAbort);
+
             starter.setSignalForAbort(signal);
             starter.setAbortTimeout(timeout);
+            starter.setMaxKillDepthForAbort(depth);
         } catch (NumberFormatException e) {
             /* ignore */
         }
@@ -183,6 +206,7 @@ public class Shell extends CommandInterpreter {
         private String shell;
         private String defaultSignal;
         private String defaultTimeout;
+        private String defaultMaxKillDepth;
 
         public DescriptorImpl() {
             load();
@@ -248,6 +272,14 @@ public class Shell extends CommandInterpreter {
 
         public void setDefaultTimeout(String defaultTimeout) {
             this.defaultTimeout = defaultTimeout;
+        }
+
+        public String getDefaultMaxKillDepth() {
+            return defaultMaxKillDepth;
+        }
+
+        public void setDefaultMaxKillDepth(String defaultMaxKillDepth) {
+            this.defaultMaxKillDepth = defaultMaxKillDepth;
         }
 
         @Override

@@ -1,0 +1,22 @@
+<div>
+This parameter represents the maximum level of call flow for sending signal to processes. This parameter overrides "Signal max depth" parameter defined in jenkins system global configuration.
+<p>
+The following diagram illustrates this:
+<pre>
+jenkins
+(level 1)
+    +-- /tmp/hudson5098448754425769363.sh
+     (level 2)
+         +-- sh -x its.sh
+          (level 3)
+              +-- python ntfc
+               (level 4)
+                   +-- SCREEN -S ntf-20150226.144305
+                   +-- bash --norc
+                   +-- bash --norc
+                   +-- bash --norc
+                   +-- bash --norc
+                   +-- screen -x ntf-20150226.144305 -p tnl_vm_testnode -A -O
+                   +-- screen -x ntf-20150226.144305 -p dut_vm_fedora-20 -A -O
+</pre>
+</div>
